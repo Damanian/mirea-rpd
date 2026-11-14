@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import logging
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,7 @@ def create_server(
     )
 
     def wrap_errors(fn):
+        @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
             try:
                 return await fn(*args, **kwargs)
@@ -64,8 +66,6 @@ def create_server(
             except Exception as e:
                 raise ToolError(f"Непредвиденная ошибка: {e}") from e
 
-        wrapper.__name__ = fn.__name__
-        wrapper.__doc__ = fn.__doc__
         return wrapper
 
     @server.tool(annotations=ACTION)
