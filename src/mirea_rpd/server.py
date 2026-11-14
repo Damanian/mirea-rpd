@@ -58,6 +58,8 @@ def create_server(
         @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
             try:
+                kwargs.pop("args", None)
+                kwargs.pop("kwargs", None)
                 return await fn(*args, **kwargs)
             except RPDAuthError as e:
                 raise ToolError(f"{e} Войдите через `rpd_login`.") from e
