@@ -9,7 +9,7 @@ description = "MCP-сервер и Python API для работы с рабоч�
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{ name = "Damanian638" }]
+authors = [{ name = "Damanian" }]
 dependencies = [
     "httpx>=0.25",
     "beautifulsoup4>=4.12",
