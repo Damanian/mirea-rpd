@@ -10,6 +10,7 @@ import click
 
 from .client import RPDClient
 from .exceptions import RPDAuthError
+from .local_login import LocalLoginServer
 from .navigator import RPDNavigator
 from .server import create_server
 from .session import SessionStore
@@ -21,9 +22,35 @@ def main():
 
 
 @main.command()
+@click.option("--terminal", "-t", is_flag=True, help="Вводить логин и пароль в терминале вместо открытия браузера.")
 @click.option("--username", "-u", default=None, help="Логин преподавателя в МИРЭА (например, konyashkin или email).")
-def login(username: str | None):
+def login(terminal: bool, username: str | None):
     """Войти в сервис rpd.mirea.ru и сохранить сессию."""
+    if not terminal:
+        click.echo("Запуск страницы безопасного входа...")
+
+        async def _web_login():
+            store = SessionStore()
+            srv = LocalLoginServer(store=store)
+            url = await srv.start(open_browser=True)
+            click.echo(f"Страница входа открыта в браузере: {url}")
+            click.echo("Введите логин и пароль на открывшейся странице...")
+            try:
+                # Wait until login is done or Ctrl+C
+                await srv._done.wait()
+                click.echo(f"\n✓ Успешный вход! Сессия сохранена в {store.path}")
+            except KeyboardInterrupt:
+                click.echo("\nВход отменён.")
+            finally:
+                await srv.stop()
+
+        try:
+            asyncio.run(_web_login())
+        except KeyboardInterrupt:
+            click.echo("\nВход отменён.")
+        return
+
+    # Terminal mode
     if not username:
         username = input("Логин МИРЭА: ").strip()
 
@@ -118,7 +145,7 @@ def search(query: str, year: str):
 @main.command()
 def mcp():
     """Запустить MCP-сервер (протокол stdio)."""
-    server = create_server()
+    server, _ = create_server()
     server.run("stdio")
 
 

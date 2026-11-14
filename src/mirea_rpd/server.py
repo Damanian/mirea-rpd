@@ -13,17 +13,23 @@ from mcp.types import ToolAnnotations
 from .client import RPDClient
 from .editor import RPDEditor
 from .exceptions import RPDAuthError, RPDError
+from .local_login import LocalLoginServer
 from .navigator import RPDNavigator
 from .session import SessionStore
+from .templates import TemplateManager
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True)
+ACTION = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 
 INSTRUCTIONS = (
     "Коннектор к сервису рабочих программ дисциплин (РПД) РТУ МИРЭА (rpd.mirea.ru). "
     "Позволяет искать дисциплины, учебные планы (РУП), кафедры и направления подготовки; "
     "читать структуру утвержденных и разрабатываемых РПД: разделы, темы занятий, распределение часов, "
-    "фонды оценочных средств (ФОС), списки литературы и компетенции."
+    "фонды оценочных средств (ФОС), списки литературы и компетенции; "
+    "а также заполнять РПД по шаблонам на сайте. "
+    "Если пользователь просит войти ('войти'), вызови инструмент rpd_login — он откроет страницу "
+    "входа в браузере на локальном компьютере, где пользователь безопасно введет учетные данные."
 )
 
 logger = logging.getLogger(__name__)
@@ -32,12 +38,14 @@ logger = logging.getLogger(__name__)
 def create_server(
     session_store: SessionStore | None = None,
     client: RPDClient | None = None,
-) -> MCPServer:
+) -> tuple[MCPServer, LocalLoginServer]:
     """Build and configure the MIREA RPD MCP Server."""
     store = session_store or SessionStore()
     rpd_client = client or RPDClient(session_store=store)
     nav = RPDNavigator(rpd_client)
     editor = RPDEditor(rpd_client)
+    tpl_mgr = TemplateManager(rpd_client)
+    login_srv = LocalLoginServer(store=store)
 
     server = MCPServer(
         name="mirea-rpd",
@@ -50,7 +58,7 @@ def create_server(
             try:
                 return await fn(*args, **kwargs)
             except RPDAuthError as e:
-                raise ToolError(f"{e} Войдите через `mirea-rpd login`.") from e
+                raise ToolError(f"{e} Войдите через `rpd_login`.") from e
             except RPDError as e:
                 raise ToolError(f"Ошибка РПД: {e}") from e
             except Exception as e:
@@ -60,20 +68,32 @@ def create_server(
         wrapper.__doc__ = fn.__doc__
         return wrapper
 
+    @server.tool(annotations=ACTION)
+    @wrap_errors
+    async def rpd_login(open_browser: bool = True) -> dict[str, Any]:
+        """Открыть локальную страницу входа в браузере (127.0.0.1).
+        Пароль вводится пользователем в браузере, а не в чате. После входа сессия сохранится."""
+        url = await login_srv.start(open_browser=open_browser)
+        return {
+            "url": url,
+            "browser_opened": open_browser,
+            "message": "Страница входа открыта в браузере. Введите логин и пароль МИРЭА, а затем скажите ИИ: 'готово'.",
+        }
+
     @server.tool(annotations=READ)
     @wrap_errors
     async def rpd_status() -> dict[str, Any]:
         """Проверить состояние подключения и валидность сессии к rpd.mirea.ru."""
         stored = store.load()
         if not stored:
-            return {"authenticated": False, "message": "Сессия не найдена. Требуется вход через `mirea-rpd login`."}
+            return {"authenticated": False, "message": "Сессия не найдена. Требуется вход через `rpd_login`."}
 
         is_valid = await rpd_client.check_session()
         username = (stored.get("user_info") or {}).get("username", "unknown")
         return {
             "authenticated": is_valid,
             "username": username,
-            "message": "Сессия активна" if is_valid else "Сессия истекла. Требуется вход через `mirea-rpd login`.",
+            "message": "Сессия активна" if is_valid else "Сессия истекла. Требуется вход через `rpd_login`.",
         }
 
     @server.tool(annotations=READ)
@@ -156,6 +176,26 @@ def create_server(
 
     @server.tool(annotations=WRITE)
     @wrap_errors
+    async def rpd_apply_template(
+        rup_row_id: int,
+        rp_id: int,
+        template: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Заполнить РПД на сайте по шаблону (ИТ-ресурсы, МТО, метод. указания, литература, ОВЗ, воспитательная работа)."""
+        return await tpl_mgr.apply_template(rup_row_id=rup_row_id, rp_id=rp_id, template=template)
+
+    @server.tool(annotations=READ)
+    @wrap_errors
+    async def rpd_export_template(
+        rup_row_id: int,
+        rp_id: int,
+        save_file: str | None = None,
+    ) -> dict[str, Any]:
+        """Экспортировать готовую РПД в структурированный шаблон для тиражирования на другие дисциплины."""
+        return await tpl_mgr.export_template(rup_row_id=rup_row_id, rp_id=rp_id, save_file=save_file)
+
+    @server.tool(annotations=WRITE)
+    @wrap_errors
     async def rpd_download_draft(
         rup_row_id: int,
         rp_id: int,
@@ -172,4 +212,4 @@ def create_server(
             "size_bytes": len(content),
         }
 
-    return server
+    return server, login_srv
