@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ class SessionStore:
     """Manages saving and loading session cookies."""
 
     def __init__(self, path: Path | str | None = None) -> None:
-        self.path = Path(path) if path else DEFAULT_SESSION_FILE
+        self.path = Path(path or os.environ.get("MIREA_RPD_SESSION_FILE") or DEFAULT_SESSION_FILE)
 
     def save(self, cookies: dict[str, str], user_info: dict[str, Any] | None = None) -> None:
         """Save cookies and user info to disk."""

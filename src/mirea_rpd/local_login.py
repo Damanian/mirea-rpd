@@ -8,6 +8,7 @@ import logging
 import secrets
 import socket
 import webbrowser
+from contextlib import suppress
 
 import uvicorn
 from starlette.applications import Starlette
@@ -259,7 +260,7 @@ class LocalLoginServer:
             self._server.should_exit = True
         if self._task:
             self._task.cancel()
-            with asyncio.suppress(asyncio.CancelledError):
+            with suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
         self._server = None

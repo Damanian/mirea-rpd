@@ -1,5 +1,6 @@
 """Exceptions for MIREA RPD."""
 
+
 class RPDError(Exception):
     """Base exception for RPD operations."""
 

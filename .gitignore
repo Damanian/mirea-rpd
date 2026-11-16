@@ -44,3 +44,4 @@ session_store.json
 .pytest_cache/
 .coverage
 htmlcov/
+.audit-cache/

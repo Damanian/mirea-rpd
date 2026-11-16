@@ -32,8 +32,17 @@ async def test_get_plan_item_rups(nav):
     mock_data = [{"rupRowId": 2035865, "discName": "Авионика беспилотных систем", "depId": 262}]
 
     async with respx.mock(base_url="https://rpd.mirea.ru") as respx_mock:
+        respx_mock.get(path="/RpdManager/GetPlanEntities").respond(
+            200,
+            json={
+                "result": True,
+                "data": {
+                    "planItems": {"items": [{"name": "Авионика беспилотных систем", "depId": 262, "objectType": 2}]}
+                },
+            },
+        )
         respx_mock.get(
-            "/RpdManager/GetPlanItemRups?accYear=2026-2027&objType=0&hideWithoutStudents=false&showOnlyWithRp=false&depId=262&discName=%D0%90%D0%B2%D0%B8%D0%BE%D0%BD%D0%B8%D0%BA%D0%B0"
+            path="/RpdManager/GetPlanItemRups", params={"objType": 2, "discName": "Авионика беспилотных систем"}
         ).respond(200, json=mock_data)
 
         res = await nav.get_plan_item_rups(

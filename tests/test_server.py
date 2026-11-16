@@ -23,3 +23,13 @@ def test_server_creation(tmp_path):
     assert "rpd_apply_template" in tool_names
     assert "rpd_export_template" in tool_names
     assert "rpd_download_draft" in tool_names
+    assert "rpd_validate_template" in tool_names
+    assert "rpd_get_autofill_context" in tool_names
+
+
+def test_autofill_tool_has_structured_schema(tmp_path):
+    server, _ = create_server(session_store=SessionStore(tmp_path / "session.json"))
+    schema = server._tool_manager.get_tool("rpd_apply_template").parameters
+    assert schema["$defs"]["RPDTemplate"]["additionalProperties"] is False
+    assert "sections" in schema["$defs"]["RPDTemplate"]["properties"]
+    assert "semester" in schema["$defs"]["WorkItemTemplate"]["properties"]

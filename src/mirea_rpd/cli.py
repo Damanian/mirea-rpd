@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import getpass
+import json
 import sys
 
 import click
@@ -12,8 +13,10 @@ from .client import RPDClient
 from .exceptions import RPDAuthError
 from .local_login import LocalLoginServer
 from .navigator import RPDNavigator
+from .schemas import HourBudget, SemesterHourBudget
 from .server import create_server
 from .session import SessionStore
+from .validation import validate_template
 
 
 @click.group()
@@ -77,6 +80,7 @@ def login(terminal: bool, username: str | None):
 @main.command()
 def status():
     """Проверить статус сохранённой сессии."""
+
     async def _check():
         store = SessionStore()
         stored = store.load()
@@ -114,6 +118,7 @@ def logout():
 @click.option("--year", "-y", default="2026-2027", help="Учебный год (по умолчанию 2026-2027).")
 def search(query: str, year: str):
     """Поиск дисциплины в учебных планах."""
+
     async def _search():
         store = SessionStore()
         client = RPDClient(session_store=store)
@@ -140,6 +145,28 @@ def search(query: str, year: str):
             await client.close()
 
     asyncio.run(_search())
+
+
+@main.command()
+@click.argument("template_file", type=click.File("r", encoding="utf-8"))
+@click.option(
+    "--budget-file", type=click.File("r", encoding="utf-8"), help="JSON с проверенными часами учебного плана."
+)
+def validate(template_file, budget_file):
+    """Проверить JSON-шаблон без подключения к сайту и изменения РПД."""
+    try:
+        template = json.load(template_file)
+        budget = json.load(budget_file) if budget_file else {}
+        total_budget = HourBudget.model_validate(budget["hours"]) if "hours" in budget else None
+        semester_budgets = (
+            [SemesterHourBudget.model_validate(item) for item in budget["semesters"]] if "semesters" in budget else None
+        )
+        report = validate_template(template, total_budget, semester_budgets, budget.get("indicators"))
+    except (ValueError, TypeError, KeyError) as e:
+        raise click.ClickException(f"Некорректный JSON или бюджет часов: {e}") from e
+    click.echo(json.dumps(report, ensure_ascii=False, indent=2))
+    if not report["valid"]:
+        raise click.exceptions.Exit(1)
 
 
 @main.command()

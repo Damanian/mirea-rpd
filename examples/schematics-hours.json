@@ -1,0 +1,22 @@
+{
+  "semesters": [
+    {
+      "semester": 5,
+      "lectures": 16,
+      "labs": 16,
+      "practices": 16,
+      "self_study": 24
+    },
+    {
+      "semester": 6,
+      "lectures": 32,
+      "labs": 16,
+      "practices": 16,
+      "self_study": 8
+    }
+  ],
+  "indicators": [
+    "ОПК-2.1",
+    "ОПК-2.2"
+  ]
+}
